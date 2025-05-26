@@ -19,12 +19,12 @@ jobs:
             ./aws/install
 
       - run:
-    name: Setup AWS Credentials
+    name: Assume Role with OIDC
     command: |
-      mkdir -p ~/.aws
-      echo "[default]" > ~/.aws/credentials
-      echo "aws_access_key_id=${AWS_ACCESS_KEY_ID}" >> ~/.aws/credentials
-      echo "aws_secret_access_key=${AWS_SECRET_ACCESS_KEY}" >> ~/.aws/credentials
+      export AWS_ROLE_ARN="arn:aws:iam::265753586529:role/CircleCi-Role"
+      export AWS_WEB_IDENTITY_TOKEN_FILE="/tmp/web_identity_token"
+      curl -s -o $AWS_WEB_IDENTITY_TOKEN_FILE "$CIRCLE_OIDC_TOKEN"
+      export AWS_DEFAULT_REGION="ap-south-1"
 
 
       - run:

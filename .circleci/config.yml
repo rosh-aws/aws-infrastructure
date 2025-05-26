@@ -1,10 +1,7 @@
 version: 2.1
 
-orbs:
-  terraform: circleci/terraform@3.2.1
-
 jobs:
-  terraform-init-and-plan:
+  terraform-plan:
     docker:
       - image: cimg/python:3.10
     steps:
@@ -13,10 +10,10 @@ jobs:
       - run:
           name: Install Terraform
           command: |
-            sudo apt-get update && sudo apt-get install -y gnupg software-properties-common curl unzip
-            curl -fsSL https://apt.releases.hashicorp.com/gpg | gpg --dearmor -o /usr/share/keyrings/hashicorp-archive-keyring.gpg
-            echo "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/hashicorp.list
-            sudo apt-get update && sudo apt-get install -y terraform
+            curl -LO https://releases.hashicorp.com/terraform/1.6.6/terraform_1.6.6_linux_amd64.zip
+            unzip terraform_1.6.6_linux_amd64.zip
+            sudo mv terraform /usr/local/bin/
+            terraform -version
 
       - run:
           name: Install AWS CLI
@@ -24,6 +21,7 @@ jobs:
             curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
             unzip awscliv2.zip
             sudo ./aws/install
+            aws --version
 
       - run:
           name: Assume Role with OIDC
@@ -40,7 +38,51 @@ jobs:
             terraform init
             terraform plan -out=tfplan
 
+  terraform-apply:
+    docker:
+      - image: cimg/python:3.10
+    steps:
+      - checkout
+
+      - run:
+          name: Install Terraform
+          command: |
+            curl -LO https://releases.hashicorp.com/terraform/1.6.6/terraform_1.6.6_linux_amd64.zip
+            unzip terraform_1.6.6_linux_amd64.zip
+            sudo mv terraform /usr/local/bin/
+            terraform -version
+
+      - run:
+          name: Install AWS CLI
+          command: |
+            curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+            unzip awscliv2.zip
+            sudo ./aws/install
+            aws --version
+
+      - run:
+          name: Assume Role with OIDC
+          command: |
+            export AWS_ROLE_ARN="arn:aws:iam::265753586529:role/CircleCi-Role"
+            export AWS_WEB_IDENTITY_TOKEN_FILE="/tmp/web_identity_token"
+            curl -s -o $AWS_WEB_IDENTITY_TOKEN_FILE "$CIRCLE_OIDC_TOKEN"
+            export AWS_DEFAULT_REGION="ap-south-1"
+
+      - run:
+          name: Terraform Apply
+          command: |
+            cd envs/dev
+            terraform init
+            terraform apply -auto-approve
+
 workflows:
   terraform-workflow:
     jobs:
-      - terraform-init-and-plan
+      - terraform-plan
+      - hold-apply:
+          type: approval
+          requires:
+            - terraform-plan
+      - terraform-apply:
+          requires:
+            - hold-apply

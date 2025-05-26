@@ -8,12 +8,8 @@ jobs:
       - checkout
 
       - run:
-          name: Install Terraform
-          command: |
-            curl -LO https://releases.hashicorp.com/terraform/1.6.6/terraform_1.6.6_linux_amd64.zip
-            unzip terraform_1.6.6_linux_amd64.zip
-            sudo mv terraform /usr/local/bin/
-            terraform -version
+          name: Install jq
+          command: sudo apt-get update && sudo apt-get install -y jq
 
       - run:
           name: Install AWS CLI
@@ -28,70 +24,20 @@ jobs:
           command: |
             export AWS_ROLE_ARN="arn:aws:iam::265753586529:role/CircleCi-Role"
             export AWS_WEB_IDENTITY_TOKEN_FILE="/tmp/web_identity_token"
-            curl -s -o $AWS_WEB_IDENTITY_TOKEN_FILE "$CIRCLE_OIDC_TOKEN"
             export AWS_DEFAULT_REGION="ap-south-1"
+            curl -s -o "$AWS_WEB_IDENTITY_TOKEN_FILE" "$CIRCLE_OIDC_TOKEN"
+            creds=$(aws sts assume-role-with-web-identity \
+              --role-arn "$AWS_ROLE_ARN" \
+              --role-session-name "CircleCISession" \
+              --web-identity-token file://$AWS_WEB_IDENTITY_TOKEN_FILE \
+              --duration-seconds 3600)
+            export AWS_ACCESS_KEY_ID=$(echo $creds | jq -r '.Credentials.AccessKeyId')
+            export AWS_SECRET_ACCESS_KEY=$(echo $creds | jq -r '.Credentials.SecretAccessKey')
+            export AWS_SESSION_TOKEN=$(echo $creds | jq -r '.Credentials.SessionToken')
 
       - run:
-          name: Terraform Init and Plan
+          name: Terraform Init + Plan
           command: |
             cd envs/dev
             terraform init
             terraform plan -out=tfplan
-
-  terraform-apply:
-    docker:
-      - image: cimg/python:3.10
-    steps:
-      - checkout
-
-      - run:
-          name: Install Terraform
-          command: |
-            curl -LO https://releases.hashicorp.com/terraform/1.6.6/terraform_1.6.6_linux_amd64.zip
-            unzip terraform_1.6.6_linux_amd64.zip
-            sudo mv terraform /usr/local/bin/
-            terraform -version
-
-      - run:
-          name: Install AWS CLI
-          command: |
-            curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
-            unzip awscliv2.zip
-            sudo ./aws/install
-            aws --version
-
-      - run:
-    name: Assume Role with OIDC
-    command: |
-      apt-get update && apt-get install -y jq
-      export AWS_ROLE_ARN="arn:aws:iam::265753586529:role/CircleCi-Role"
-      export AWS_WEB_IDENTITY_TOKEN_FILE="/tmp/web_identity_token"
-      export AWS_DEFAULT_REGION="ap-south-1"
-      curl -s -o "$AWS_WEB_IDENTITY_TOKEN_FILE" "$CIRCLE_OIDC_TOKEN"
-      creds=$(aws sts assume-role-with-web-identity \
-        --role-arn "$AWS_ROLE_ARN" \
-        --role-session-name "CircleCISession" \
-        --web-identity-token file://$AWS_WEB_IDENTITY_TOKEN_FILE \
-        --duration-seconds 3600)
-      export AWS_ACCESS_KEY_ID=$(echo $creds | jq -r '.Credentials.AccessKeyId')
-      export AWS_SECRET_ACCESS_KEY=$(echo $creds | jq -r '.Credentials.SecretAccessKey')
-      export AWS_SESSION_TOKEN=$(echo $creds | jq -r '.Credentials.SessionToken')
-           
-      - run:  
-    name: Terraform Apply
-    command: |
-            cd envs/dev
-            terraform init
-            terraform apply -auto-approve
-
-workflows:
-  terraform-workflow:
-    jobs:
-      - terraform-plan
-      - hold-apply:
-          type: approval
-          requires:
-            - terraform-plan
-      - terraform-apply:
-          requires:
-            - hold-apply

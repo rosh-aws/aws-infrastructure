@@ -28,4 +28,4 @@ jobs:
 workflows:
   terraform-workflow:
     jobs:
-      - terraform-apply
+      - terraform-apply 

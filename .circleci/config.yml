@@ -61,16 +61,25 @@ jobs:
             aws --version
 
       - run:
-          name: Assume Role with OIDC
-          command: |
-            export AWS_ROLE_ARN="arn:aws:iam::265753586529:role/CircleCi-Role"
-            export AWS_WEB_IDENTITY_TOKEN_FILE="/tmp/web_identity_token"
-            curl -s -o $AWS_WEB_IDENTITY_TOKEN_FILE "$CIRCLE_OIDC_TOKEN"
-            export AWS_DEFAULT_REGION="ap-south-1"
-
-      - run:
-          name: Terraform Apply
-          command: |
+    name: Assume Role with OIDC
+    command: |
+      apt-get update && apt-get install -y jq
+      export AWS_ROLE_ARN="arn:aws:iam::265753586529:role/CircleCi-Role"
+      export AWS_WEB_IDENTITY_TOKEN_FILE="/tmp/web_identity_token"
+      export AWS_DEFAULT_REGION="ap-south-1"
+      curl -s -o "$AWS_WEB_IDENTITY_TOKEN_FILE" "$CIRCLE_OIDC_TOKEN"
+      creds=$(aws sts assume-role-with-web-identity \
+        --role-arn "$AWS_ROLE_ARN" \
+        --role-session-name "CircleCISession" \
+        --web-identity-token file://$AWS_WEB_IDENTITY_TOKEN_FILE \
+        --duration-seconds 3600)
+      export AWS_ACCESS_KEY_ID=$(echo $creds | jq -r '.Credentials.AccessKeyId')
+      export AWS_SECRET_ACCESS_KEY=$(echo $creds | jq -r '.Credentials.SecretAccessKey')
+      export AWS_SESSION_TOKEN=$(echo $creds | jq -r '.Credentials.SessionToken')
+           
+      - run:  
+    name: Terraform Apply
+    command: |
             cd envs/dev
             terraform init
             terraform apply -auto-approve

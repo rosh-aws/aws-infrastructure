@@ -41,3 +41,8 @@ jobs:
             cd envs/dev
             terraform init
             terraform plan -out=tfplan
+
+        workflows:
+          terraform-workflow:
+            jobs:
+              - terraform-plan

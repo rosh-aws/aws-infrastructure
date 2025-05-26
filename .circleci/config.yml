@@ -45,9 +45,3 @@ workflows:
   terraform-workflow:
     jobs:
       - terraform-plan
-      - terraform-apply:
-          requires:
-            - terraform-plan
-          filters:
-            branches:
-              only: main

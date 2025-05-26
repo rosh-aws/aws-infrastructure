@@ -14,8 +14,7 @@ jobs:
 
       - run:
           name: Set AWS Credentials
-          command: |
-            echo "Using credentials from CircleCI environment variables"
+          command: echo "Using CircleCI environment variables for AWS credentials"
 
       - terraform/init:
           path: envs/dev
@@ -25,7 +24,6 @@ jobs:
 
       - terraform/apply:
           path: envs/dev
-          auto-approve: true
 
 workflows:
   terraform-workflow:

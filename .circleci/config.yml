@@ -1,47 +1,33 @@
 version: 2.1
 
+orbs:
+  terraform: circleci/terraform@3.2.1
+
 jobs:
-  terraform-plan:
+  terraform-apply:
     docker:
-      - image: cimg/python:3.10  # lightweight Linux with Python, apt-get etc.
+      - image: hashicorp/terraform:1.6.6
+    environment:
+      AWS_REGION: ap-south-1
     steps:
       - checkout
-      
-      - run:
-          name: Install dependencies (awscli & jq)
-          command: |
-            sudo apt-get update
-            sudo apt-get install -y unzip curl jq
-            curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
-            unzip awscliv2.zip
-            sudo ./aws/install
-            aws --version
-            jq --version
 
       - run:
-          name: Assume AWS Role with OIDC
+          name: Set AWS Credentials
           command: |
-            export AWS_ROLE_ARN="arn:aws:iam::265753586529:role/CircleCi-Role"
-            export AWS_WEB_IDENTITY_TOKEN_FILE="/tmp/web_identity_token"
-            export AWS_DEFAULT_REGION="ap-south-1"
-            curl -s -o "$AWS_WEB_IDENTITY_TOKEN_FILE" "$CIRCLE_OIDC_TOKEN"
-            creds=$(aws sts assume-role-with-web-identity \
-              --role-arn "$AWS_ROLE_ARN" \
-              --role-session-name "CircleCISession" \
-              --web-identity-token file://$AWS_WEB_IDENTITY_TOKEN_FILE \
-              --duration-seconds 3600)
-            export AWS_ACCESS_KEY_ID=$(echo $creds | jq -r '.Credentials.AccessKeyId')
-            export AWS_SECRET_ACCESS_KEY=$(echo $creds | jq -r '.Credentials.SecretAccessKey')
-            export AWS_SESSION_TOKEN=$(echo $creds | jq -r '.Credentials.SessionToken')
+            echo "Using credentials from CircleCI environment variables"
 
-      - run:
-          name: Terraform Init and Plan
-          command: |
-            cd envs/dev
-            terraform init
-            terraform plan -out=tfplan
+      - terraform/init:
+          path: envs/dev
+
+      - terraform/plan:
+          path: envs/dev
+
+      - terraform/apply:
+          path: envs/dev
+          auto-approve: true
 
 workflows:
   terraform-workflow:
     jobs:
-      - terraform-plan
+      - terraform-apply
